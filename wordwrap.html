@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+  </head>
+  <body>
+    <div style="display: flex; align-items: center; gap: 10px">
+      <label>
+        Max width
+        <input id="maxwidth" type="range" min="20" max="560" value="560" />
+      </label>
+      <label>
+        Text align
+        <select id="align">
+          <option value="left">Left</option>
+          <option value="center">Center</option>
+          <option value="right">Right</option>
+        </select>
+      </label>
+      <label>
+        Break words
+        <input id="breakword" type="checkbox" />
+      </label>
+    </div>
+    <div>
+      <textarea style="width: 600px; height: 200px">
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut vel pulvinar magna, eu facilisis urna. Donec et tempor ipsum. Praesent a nisl ac felis pulvinar sagittis. Cras turpis nulla, convallis commodo faucibus a, congue sit amet nisi. Nunc velit quam, commodo nec augue et, consequat consectetur diam. In elementum ante justo. Cras eget porttitor nibh. Proin a justo vitae sapien aliquet placerat dictum ut leo.
+
+Proin eu ipsum a metus dignissim lacinia vel dictum nulla. Sed sodales placerat semper. Phasellus interdum nisl ac leo consequat sagittis eget vitae nibh. Nunc lobortis congue ornare. Vestibulum consequat turpis nec enim aliquet, et interdum velit aliquet. Proin interdum mollis lectus, a blandit elit suscipit molestie. Pellentesque euismod, justo et pulvinar elementum, quam mi aliquam sapien, nec imperdiet sapien sapien eu velit. Ut quis arcu lectus. Integer dapibus convallis ex aliquet fringilla.
+    </textarea
+      >
+    </div>
+    <svg
+      viewBox="0 0 600 600"
+      xmlns="http://www.w3.org/2000/svg"
+      width="600"
+      height="600"
+      style="outline: 1px solid red"
+    >
+      <g transform="translate(20, 20)">
+        <rect fill="none" stroke="green"></rect>
+        <text></text>
+      </g>
+    </svg>
+    <script>
+      ;(function () {
+        const svgNs = 'http://www.w3.org/2000/svg'
+
+        const clamp = (val, min, max) =>
+          val < min ? min : val > max ? max : val
+
+        const slider = document.getElementById('maxwidth')
+        const breakword = document.getElementById('breakword')
+        const ta = document.querySelector('textarea')
+        const svgText = document.querySelector('svg text')
+        const svgRect = document.querySelector('svg rect')
+        const align = document.getElementById('align')
+        const group = document.querySelector('svg g')
+
+        if (
+          !(ta instanceof HTMLTextAreaElement) ||
+          !(svgText instanceof SVGTextElement) ||
+          !(svgRect instanceof SVGRectElement) ||
+          !(group instanceof SVGElement)
+        ) {
+          return
+        }
+
+        const update = () => {
+          console.time('Wrap')
+          let measurements = 0
+          const textBBox = svgText.getBBox()
+          const maxWidth = parseInt(slider.value, 10)
+          const alignment = align.value
+          const paragraphs = ta.value.split(/\r?\n/g)
+
+          const measureNode = document.createElementNS(svgNs, 'tspan')
+
+          let blankLines = 1
+          const lines = []
+
+          function appendLine(content, width) {
+            const span = document.createElementNS(svgNs, 'tspan')
+
+            if (alignment === 'right') {
+              span.setAttribute('x', maxWidth)
+              span.setAttribute('text-anchor', 'end')
+            } else if (alignment === 'center') {
+              span.setAttribute('text-anchor', 'middle')
+              span.setAttribute('x', maxWidth / 2)
+            } else {
+              span.setAttribute('text-anchor', 'start')
+              span.setAttribute('x', '0')
+            }
+
+            // span.setAttribute('x', svgText.getAttribute('x'))
+            span.setAttribute('dy', `${blankLines * 1.2}em`)
+            span.textContent = content
+            lines.push(span)
+            blankLines = 1
+            return span
+          }
+
+          function segmentsToString(segments, startIx, endIx) {
+            if (startIx !== undefined || endIx !== undefined) {
+              segments = segments.slice(startIx, endIx)
+            }
+            return segments.join('').trimEnd()
+          }
+
+          svgText.replaceChildren(measureNode)
+
+          for (const paragraph of paragraphs) {
+            const contents = paragraph.trim()
+            if (contents.length === 0) {
+              blankLines++
+              continue
+            }
+
+            measureNode.textContent = contents
+            let width = measureNode.getComputedTextLength()
+            measurements++
+
+            if (width <= maxWidth) {
+              appendLine(measureNode.textContent, width)
+              continue
+            }
+
+            const words = new Intl.Segmenter('en', {
+              granularity: 'word',
+            }).segment(paragraph)
+            let segments = []
+
+            for (const { segment, isWordLike } of words) {
+              if (!isWordLike && segments.length) {
+                segments[segments.length - 1] += segment
+              } else {
+                segments.push(segment)
+              }
+            }
+
+            if (segments.length === 1) {
+              appendLine(segmentsToString(segments), width)
+              continue
+            }
+
+            // We're not breaking whole words at the moment
+            while (width > maxWidth) {
+              let longestFit = 1
+              let shortestNonFit = segments.length
+              let ix = segments.length - 1
+
+              do {
+                ix *= maxWidth / width
+                ix = clamp(Math.floor(ix), longestFit + 1, shortestNonFit - 1)
+
+                measureNode.textContent = segmentsToString(segments, 0, ix)
+                width = measureNode.getComputedTextLength()
+                measurements++
+
+                if (width > maxWidth) {
+                  shortestNonFit = ix
+                } else {
+                  longestFit = ix
+                }
+              } while (shortestNonFit - longestFit > 1)
+
+              appendLine(segmentsToString(segments, 0, longestFit), width)
+              segments = segments.slice(longestFit)
+
+              measureNode.textContent = segmentsToString(segments)
+              width = measureNode.getComputedTextLength()
+              measurements++
+
+              if (width <= maxWidth) {
+                appendLine(measureNode.textContent, width)
+              }
+            }
+          }
+          console.timeEnd('Wrap')
+          console.log(
+            `measurementsPerLine: ${measurements / svgText.childElementCount}`
+          )
+
+          svgText.replaceChildren(...lines)
+
+          const bbox = svgText.getBBox()
+
+          svgRect.setAttribute('x', bbox.x)
+          svgRect.setAttribute('y', bbox.y)
+          svgRect.setAttribute('width', bbox.width)
+          svgRect.setAttribute('height', bbox.height)
+
+          if (alignment === 'right') {
+            group.setAttribute(
+              'transform',
+              `translate(${600 - bbox.width - 20}, 20)`
+            )
+          } else if (alignment === 'center') {
+            group.setAttribute(
+              'transform',
+              `translate(${(600 - bbox.width) / 2}, 20)`
+            )
+          } else {
+            group.setAttribute('transform', `translate(20, 20)`)
+          }
+        }
+
+        ta.addEventListener('input', ev => update())
+        slider.addEventListener('input', ev => update())
+        align.addEventListener('change', ev => update())
+        update()
+      })()
+    </script>
+  </body>
+</html>
