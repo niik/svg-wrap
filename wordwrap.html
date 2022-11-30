@@ -7,7 +7,7 @@
     <div style="display: flex; align-items: center; gap: 10px">
       <label>
         Max width
-        <input id="maxwidth" type="range" min="20" max="560" value="560" />
+        <input id="maxwidth" type="range" min="10" max="560" value="560" />
       </label>
       <label>
         Text align
@@ -118,12 +118,12 @@ Proin eu ipsum a metus dignissim lacinia vel dictum nulla. Sed sodales placerat 
             }
 
             const words = new Intl.Segmenter('en', {
-              granularity: 'word',
+              granularity: breakword.checked ? 'grapheme' : 'word',
             }).segment(paragraph)
             let segments = []
 
             for (const { segment, isWordLike } of words) {
-              if (!isWordLike && segments.length) {
+              if (!breakword.checked && !isWordLike && segments.length) {
                 segments[segments.length - 1] += segment
               } else {
                 segments.push(segment)
@@ -157,21 +157,8 @@ Proin eu ipsum a metus dignissim lacinia vel dictum nulla. Sed sodales placerat 
                 ix = clamp(Math.floor(ix), longestFit + 1, shortestNonFit - 1)
               } while (shortestNonFit - longestFit > 1)
 
-              if (
-                width > maxWidth &&
-                segments.length === 1 &&
-                breakword.checked
-              ) {
-                segments = [
-                  ...new Intl.Segmenter('en', {
-                    granularity: 'grapheme',
-                  }).segment(segments[0]),
-                ].map(x => x.segment)
-                ix = segments.length
-              } else {
-                appendLine(segmentsToString(segments, 0, longestFit), width)
-                segments = segments.slice(longestFit)
-              }
+              appendLine(segmentsToString(segments, 0, longestFit), width)
+              segments = segments.slice(longestFit)
             }
           }
           console.timeEnd('Wrap')
