@@ -157,8 +157,21 @@ Proin eu ipsum a metus dignissim lacinia vel dictum nulla. Sed sodales placerat 
                 ix = clamp(Math.floor(ix), longestFit + 1, shortestNonFit - 1)
               } while (shortestNonFit - longestFit > 1)
 
-              appendLine(segmentsToString(segments, 0, longestFit), width)
-              segments = segments.slice(longestFit)
+              if (
+                width > maxWidth &&
+                segments.length === 1 &&
+                breakword.checked
+              ) {
+                segments = [
+                  ...new Intl.Segmenter('en', {
+                    granularity: 'grapheme',
+                  }).segment(segments[0]),
+                ].map(x => x.segment)
+                ix = segments.length
+              } else {
+                appendLine(segmentsToString(segments, 0, longestFit), width)
+                segments = segments.slice(longestFit)
+              }
             }
           }
           console.timeEnd('Wrap')
