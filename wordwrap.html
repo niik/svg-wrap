@@ -117,15 +117,6 @@ Proin eu ipsum a metus dignissim lacinia vel dictum nulla. Sed sodales placerat 
               continue
             }
 
-            measureNode.textContent = contents
-            let width = measureNode.getComputedTextLength()
-            measurements++
-
-            if (width <= maxWidth) {
-              appendLine(measureNode.textContent, width)
-              continue
-            }
-
             const words = new Intl.Segmenter('en', {
               granularity: 'word',
             }).segment(paragraph)
@@ -139,21 +130,19 @@ Proin eu ipsum a metus dignissim lacinia vel dictum nulla. Sed sodales placerat 
               }
             }
 
-            if (segments.length === 1) {
-              appendLine(segmentsToString(segments), width)
-              continue
-            }
+            // Cache ix to use the previous line segment count as the starting
+            // point for the next. Dramatically speeds things up for long
+            // paragraphs at the expense of text consisting of many short lines
+            let ix = segments.length
 
-            // We're not breaking whole words at the moment
-            while (width > maxWidth) {
+            while (segments.length) {
               let longestFit = 1
               let shortestNonFit = segments.length
-              let ix = segments.length - 1
+              let width = 0
 
               do {
-                ix *= maxWidth / width
-                ix = clamp(Math.floor(ix), longestFit + 1, shortestNonFit - 1)
-
+                // Regarding our use of ix here, it's safe to slice beyond the
+                // bounds of the segments array
                 measureNode.textContent = segmentsToString(segments, 0, ix)
                 width = measureNode.getComputedTextLength()
                 measurements++
@@ -163,18 +152,13 @@ Proin eu ipsum a metus dignissim lacinia vel dictum nulla. Sed sodales placerat 
                 } else {
                   longestFit = ix
                 }
+
+                ix *= maxWidth / width
+                ix = clamp(Math.floor(ix), longestFit + 1, shortestNonFit - 1)
               } while (shortestNonFit - longestFit > 1)
 
               appendLine(segmentsToString(segments, 0, longestFit), width)
               segments = segments.slice(longestFit)
-
-              measureNode.textContent = segmentsToString(segments)
-              width = measureNode.getComputedTextLength()
-              measurements++
-
-              if (width <= maxWidth) {
-                appendLine(measureNode.textContent, width)
-              }
             }
           }
           console.timeEnd('Wrap')
@@ -209,6 +193,7 @@ Proin eu ipsum a metus dignissim lacinia vel dictum nulla. Sed sodales placerat 
         ta.addEventListener('input', ev => update())
         slider.addEventListener('input', ev => update())
         align.addEventListener('change', ev => update())
+        breakword.addEventListener('click', ev => update())
         update()
       })()
     </script>
